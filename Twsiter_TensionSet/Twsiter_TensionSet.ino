@@ -41,50 +41,91 @@
 //PID Library
 #include <PID_v1.h>
 
+// Variables used for PID controller
+float elapsedTime, time, timePrev;
+int i;
+
+float PD, error, previous_error;
+float pid_p=0;
+float pid_d=0;
+/////////////////PD CONSTANTS/////////////////
+double kp=3.55;//3.55
+double kd=2.05;//2.05
+///////////////////////////////////////////////
+
+double output; // Motor Speed
+float tension;
+
+
 //Define Variables we'll be connecting to
 double Input, Output, PosOutput;
 int SetOutput;
 double Setpoint = SETPOINT;
-
-//Specify the links and initial tuning parameters
-PID myPID(&Input, &Output, &Setpoint,.2,0,0, DIRECT);
-
 
 TCPATwister *Twister;
 bool EncoderUpdate = false;
 
 void setup() {
     Input = analogRead(INPUT_PIN);
-  myPID.SetOutputLimits(-1023, 1023); 
-#ifdef DebugMode
-  Serial.begin(9600);
-#endif
-  //turn the PID on
-  myPID.SetMode(AUTOMATIC);
+    #ifdef DebugMode
+      Serial.begin(9600);
+    #endif
 
   
-  Twister = &TCPATwister::SingletonTwister();
-  Twister->Initialize();
-  Twister->setTwistSetCount(20);
-  Twister->setLeadSetCount(20);
-  Twister->StartTimer(50);
-  Twister->toggleLeadDir();
-  InitEncoder();
-  Twister->setTwistEnable(1);     //Active low enable, 1 disables
+    Twister = &TCPATwister::SingletonTwister();
+    Twister->Initialize();
+    Twister->setTwistSetCount(20);
+    Twister->setLeadSetCount(20);
+    Twister->StartTimer(50);
+    Twister->toggleLeadDir();
+    InitEncoder();
 
-#ifdef DebugMode
-  Serial.println(Input);
-#endif
-while(1){}
+    time = millis(); //Start counting time in milliseconds
+
+    
+    Twister->setTwistEnable(1);     //Active low enable, 1 disables
+
+    #ifdef DebugMode
+      Serial.println(Input);
+    #endif
+
+    
   while(Input < SETPOINTMIN || Input > SETPOINTMAX){
     PID_Contr();
     Input = analogRead(INPUT_PIN);
 
   }
   Twister->setTwistEnable(0);     //Active low enable, 1 disables
+
+  
 }
 void loop(){
-  PID_Contr();
+  timePrev = time;  // the previous time is stored before the actual time read
+  time = millis();  // actual time read
+  elapsedTime = (time - timePrev) / 1000; 
+  Input = analogRead(INPUT_PIN); //This is the value comming from the load cell
+  error = tension - set_tension;
+  pid_p = kp*error;
+  pid_d = kd*((error - previous_error)/elapsedTime);
+  /*Generate the PD Output*/
+  PD = pid_p + pid_d;
+  /*We need to setup the upper and lower limit of the PD output*/
+  if(PD < -1000){
+    PD=-1000;
+  }
+  if(PD > 1000){
+    PD=1000;
+  }
+  /*Update Motor*/
+  output = output + PD;
+  /*Check for output values*/
+  if(output < 1000){
+    output= 1000;
+  }
+  if(output > 2000){
+    output=2000;
+  }
+  previous_error = error; //Remember to store the previous error.
 }
 
 
@@ -112,6 +153,27 @@ void Encoder_CW(){
 void Encoder_CCW(){
  Twister->setTwistSetCount(Twister->getTwistSetCount() - 1);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void PID_Contr(){
   //input is output from loadcell.  I picked an arbitray pin for now
