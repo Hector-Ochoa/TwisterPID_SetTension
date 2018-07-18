@@ -1,5 +1,3 @@
-#include <PID_v1.h>
-
 /*
  * Date: 4/18/18
  * Author: Collin Timmons
@@ -17,13 +15,25 @@
  *Issues: The impact on the peripherals due to using Timer3 is not fully understood at this point in time. Some software PWM outputs will be non-operational.
  *  This issue can be fixed by using a different timer.
 */
+
+//Comment out to remove debug mode.
+//#define DebugMode
+
+//Pin Defines
 #define INPUT_PIN A9
 #define ROT_ENCODER_PIN_1 31
 #define ROT_ENCODER_PIN_2 33
+
+//Constant Defines
 #define IN 1
 #define OUT 0
-//#define ROT_ENCODER_PIN_BUT 
+#define SETPOINT 200
+#define SETPOINTRANGE 10
+#define SETPOINTMAX SETPOINT + SETPOINTRANGE
+#define SETPOINTMIN SETPOINT - SETPOINTRANGE
 
+//Other Defines
+//#define ROT_ENCODER_PIN_BUT 
 
 //#define LeadMotor Z
 #include "TCPATwister.h"
@@ -32,9 +42,9 @@
 #include <PID_v1.h>
 
 //Define Variables we'll be connecting to
-double Setpoint, Input, Output, PosOutput;
+double Input, Output, PosOutput;
 int SetOutput;
-char watch = 1;
+double Setpoint = SETPOINT;
 
 //Specify the links and initial tuning parameters
 PID myPID(&Input, &Output, &Setpoint,.2,0,0, DIRECT);
@@ -44,17 +54,11 @@ TCPATwister *Twister;
 bool EncoderUpdate = false;
 
 void setup() {
-  pinMode(1,OUTPUT);
-//initialize the variables we're linked to
-//input is output from loadcell.  I picked an arbitray pin for now
-  Input = analogRead(INPUT_PIN);
-//setpoint is also pretty arbitrary as of right now.
-  Setpoint=102;
-  //Setpoint = 100;
- myPID.SetOutputLimits(-1023, 1023); 
-
-//Serial.begin(9600);
-
+    Input = analogRead(INPUT_PIN);
+  myPID.SetOutputLimits(-1023, 1023); 
+#ifdef DebugMode
+  Serial.begin(9600);
+#endif
   //turn the PID on
   myPID.SetMode(AUTOMATIC);
 
@@ -65,20 +69,22 @@ void setup() {
   Twister->setLeadSetCount(20);
   Twister->StartTimer(50);
   Twister->toggleLeadDir();
-//Serial.println("h");
   InitEncoder();
   Twister->setTwistEnable(1);     //Active low enable, 1 disables
-  while(Input < Setpoint-10 || Input > Setpoint+10){
+
+#ifdef DebugMode
+  Serial.println(Input);
+#endif
+while(1){}
+  while(Input < SETPOINTMIN || Input > SETPOINTMAX){
     PID_Contr();
     Input = analogRead(INPUT_PIN);
-//Serial.println(Input);
+
   }
   Twister->setTwistEnable(0);     //Active low enable, 1 disables
-  
 }
 void loop(){
-PID_Contr();
-
+  PID_Contr();
 }
 
 
@@ -107,15 +113,12 @@ void Encoder_CCW(){
  Twister->setTwistSetCount(Twister->getTwistSetCount() - 1);
 }
 
-
-
-
 void PID_Contr(){
-
- 
   //input is output from loadcell.  I picked an arbitray pin for now
   Input = analogRead(INPUT_PIN);
- //Serial.println(Input);
+#ifdef DebugMode
+  //Serial.println(Input);
+#endif
   //Output=(Output,0,255,1023,0);
 //checking input as a precaution.
   if (Input >= 550){
@@ -127,9 +130,7 @@ void PID_Contr(){
 //grabbing output and making it positive
   PosOutput=abs(Output);
   PosOutput=50*(PosOutput/550);
- // Serial.println(Output);
- watch = !watch;
- digitalWrite(1,watch);
+
  //digitalWrite(1,!digitalRead(1));
   if (Output < 0) {
    
@@ -145,5 +146,6 @@ Twister->setLeadSetCount(50-SetOutput);
 
 }
   
+
 
 
