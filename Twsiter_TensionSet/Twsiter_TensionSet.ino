@@ -17,7 +17,7 @@
 */
 
 //Comment out to remove debug mode.
-//#define DebugMode
+#define DebugMode
 
 //Pin Defines
 #define INPUT_PIN A9
@@ -25,9 +25,9 @@
 #define ROT_ENCODER_PIN_2 33
 
 //Constant Defines
-#define IN 1
-#define OUT 0
-#define SETPOINT 200
+#define IN 0
+#define OUT 1
+#define SETPOINT 100
 #define SETPOINTRANGE 10
 #define SETPOINTMAX SETPOINT + SETPOINTRANGE
 #define SETPOINTMIN SETPOINT - SETPOINTRANGE
@@ -48,8 +48,8 @@ double Setpoint = SETPOINT;
 double pid_p=0;
 double pid_d=0;
 /////////////////PD CONSTANTS/////////////////
-double kp=3.55;//3.55
-double kd=2.05;//2.05
+double kp=0.01;//3.55
+double kd=0.01;//2.05
 ///////////////////////////////////////////////
 
 TCPATwister *Twister;
@@ -58,24 +58,26 @@ bool EncoderUpdate = false;
 void setup() {
     Twister = &TCPATwister::SingletonTwister();
     Twister->Initialize();
-    Twister->setTwistSetCount(20);
+    Twister->setTwistSetCount(100);
     Twister->setLeadSetCount(20);
     Twister->StartTimer(50);
     Twister->toggleLeadDir();
     InitEncoder();
 
     time = millis(); //Start counting time in milliseconds
-	Input = analogRead(INPUT_PIN);
+    timePrev = 0;
+	  Input = analogRead(INPUT_PIN);
 		#ifdef DebugMode
 			Serial.begin(9600);
 		#endif
     
-	previous_error = Input - Setpoint;
-	Output = 0;
-	SetOutput = 0;
-	Twister->setLeadSetCount(300-SetOutput);
+	  previous_error = Input - Setpoint;
+	  Output = 0;
+	  SetOutput = 0;
     Twister->setTwistEnable(1);     //Active low enable, Twister Motor is diasablled
-	Twister->setLeadEnable(1); 
+	  Twister->setLeadEnable(0); 
+    Twister->setLeadSetCount(300-SetOutput);
+    delay(100);
 }
 
 void loop(){
@@ -83,6 +85,7 @@ void loop(){
   time = millis();  // actual time read
   elapsedTime = (time - timePrev) / 1000; 
   Input = analogRead(INPUT_PIN); //This is the value comming from the load cell
+
   //checking input as a precaution.
   if (Input >= 550){
     Twister->setTwistEnable(1);     //Active low enable, 1 disables
@@ -90,44 +93,57 @@ void loop(){
     Twister->setLeadSetCount(20);
   }
   error = Input-Setpoint;
+  #ifdef DebugMode
+    Serial.println(error);
+  #endif
+  if (error<=1){
+    Twister->setTwistEnable(0); 
+  }
+
+
   pid_p = kp*error;
   pid_d = kd*((error - previous_error)/elapsedTime);
+
   /*Generate the PD Output*/
   PD = pid_p + pid_d;
   /*We need to setup the upper and lower limit of the PD output*/
-  if(PD < -1024){
-    PD=-1024;
-  }
-  if(PD > 1024){
-    PD=1024;
-  }
   /*Update Motor*/
   Output = Output + PD;
+  if(Output < -1024){
+    Output=-1024;
+  }
+  if(Output > 1024){
+    Output=1024;
+  }
+
+
   /*Check for output values*/
 
   //grabbing output and making it positive
   PosOutput=abs(Output);
-  PosOutput=50*(PosOutput/1024);
+  PosOutput=500*(PosOutput/1024);
 
  //digitalWrite(1,!digitalRead(1));
   if (Output < 0) {
    
     //code to reverse motor direction
-	Twister->setLeadEnable(1);
-	delay(100);
+	//Twister->setLeadEnable(1);
+	//delay(100);
     Twister->setLeadDir(IN);
-	Twister->setLeadEnable(0);
+	//Twister->setLeadEnable(0);
 	
   }
   else{
-	Twister->setLeadEnable(1);
-	delay(100);
+	//Twister->setLeadEnable(1);
+	//delay(100);
     Twister->setLeadDir(OUT);
-	Twister->setLeadEnable(0);
+	//Twister->setLeadEnable(0);
   }
   SetOutput= (int) PosOutput;
-  Twister->setLeadSetCount(50-SetOutput);
+  //Twister->setLeadSetCount(500);
+  Twister->setLeadSetCount(500-SetOutput);
   previous_error = error; //Remember to store the previous error.
+  delay(30);
 }
 
 
